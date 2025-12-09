@@ -1,4 +1,4 @@
-# Bitcoin Time-Series Forecasting Project
+# Bitcoin Return Forecasting Using ARIMA, XGBoost, LSTM, and Ridge Stacking
 
 ## 📌 Project Overview
 This project builds a time-series forecasting system for Bitcoin daily log-returns using:
