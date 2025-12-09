@@ -166,12 +166,21 @@ Run:
 codes/arima.ipynb
 ```
 
-This notebook:
+This notebook performs the following steps:
 
-- Fits Auto-ARIMA to `log_return_norm`
-- Predicts on test set
-- Plots **Actual vs Predicted**
-- Saves predictions:
+- Loads preprocessed training and test data (`log_return_norm`)
+- Uses `auto_arima` to automatically select the best `(p, d, q)` order
+- Uses **TimeSeriesSplit (5 folds)** to generate out-of-sample (OOS) predictions for stacking  
+  (fits ARIMA on each fold and forecasts into the validation window)
+- Fits the final ARIMA model on the full training series
+- Forecasts the complete test set
+- Computes evaluation metrics:
+  - Directional accuracy  
+  - Correlation  
+  - R²  
+  - Sharpe ratio  
+- Plots **Actual vs ARIMA Predictions**
+- Saves outputs:
 
 ```
 predictions/arima_train_preds.npy
@@ -187,12 +196,22 @@ Run:
 codes/xgboost.ipynb
 ```
 
-This notebook:
+This notebook performs the following steps:
 
-- Trains on engineered + scaled features  
-- Uses TimeSeriesSplit  
-- Plots **Actual vs Predicted**  
-- Saves predictions:
+- Loads preprocessed train/test datasets
+- Loads saved feature metadata (`feature_info.pkl`) and selects the engineered base features
+- Uses **TimeSeriesSplit (5 folds)** to generate out-of-sample (OOS) predictions for stacking  
+  (fits a temporary XGBoost model on each training fold and predicts on the validation fold)
+- Trains a final XGBoost model on the full training dataset
+- Generates predictions on the test set
+- Computes evaluation metrics:
+  - Directional accuracy  
+  - Correlation  
+  - R² score  
+  - Sharpe ratio  
+
+- Plots **Actual vs XGBoost Predictions**
+- Saves all outputs:
 
 ```
 predictions/xgb_train_preds.npy
@@ -208,12 +227,19 @@ Run:
 codes/lstm.ipynb
 ```
 
-This notebook:
-
-- Loads LSTM sequences from preprocessing
-- Trains an LSTM model with early stopping
-- Plots **Actual vs Predicted**
-- Saves predictions:
+- Loads preprocessed LSTM training and test sequences  
+- Loads feature metadata (`feature_info.pkl`) for sequence length and feature dimensions  
+- Uses **TimeSeriesSplit (5 folds)** to generate out-of-sample (OOS) predictions for stacking  
+  (fits a temporary LSTM model on each fold and predicts on the validation fold)
+- Trains a final LSTM model on the full training dataset  
+- Generates predictions on the test set  
+- Computes evaluation metrics:
+  - Directional accuracy  
+  - Correlation  
+  - R² score  
+  - Sharpe ratio  
+- Plots **Actual vs LSTM Predictions**  
+- Saves all outputs:
 
 ```
 predictions/lstm_train_preds.npy
@@ -229,13 +255,28 @@ Run:
 codes/stacking.ipynb
 ```
 
-This notebook:
+This notebook performs the following steps:
 
-- Loads ARIMA, XGBoost, and LSTM predictions  
-- Builds stacking feature matrix  
-- Fits **Ridge Regression** as the meta-learner  
-- Plots stacked **Actual vs Predicted**
-- Saves predictions:
+- Loads out-of-sample (OOS) train and test predictions from all three base models
+- Loads actual train/test targets (`y_train_lstm.npy`, `y_test_lstm.npy`)
+- Aligns and trims arrays to match LSTM sequence length
+- Removes NaNs from OOS predictions
+- Builds the meta-feature matrix:
+
+```
+[ ARIMA_pred , XGBoost_pred , LSTM_pred ]
+```
+
+- Trains a **Ridge Regression** meta-model (alpha = 10)
+- Generates final stacked predictions on the test set
+- Computes evaluation metrics:
+  - Directional accuracy  
+  - Correlation  
+  - R² score  
+  - Sharpe ratio  
+- Plots **Actual vs Ridge Predictions**
+- Compares stacked performance vs each base model  
+- Saves all outputs:
 
 ```
 predictions/meta_ridge_test_preds.npy
