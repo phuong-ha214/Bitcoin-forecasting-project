@@ -1,188 +1,278 @@
-# Bitcoin-forecasting-project
-📌 Project Overview
+# Bitcoin Time-Series Forecasting Project
 
+## 📌 Project Overview
 This project builds a time-series forecasting system for Bitcoin daily log-returns using:
 
-ARIMA (traditional statistical model)
+- **ARIMA** (statistical model)
+- **XGBoost** (tree-based ML model)
+- **LSTM** (deep learning sequence model)
+- **Stacking meta-model** (Ridge Regression)
 
-XGBoost (tree-based ML model)
+The workflow produces out-of-sample predictions for each base model and combines them to improve accuracy.
 
-LSTM (deep learning sequence model)
+---
 
-Stacking meta-model (Ridge Regression)
+# 🚀 1. Setup Instructions
 
-The workflow produces out-of-sample predictions for each base model, evaluates performance, and combines them using stacking for improved accuracy.
-
-🚀 1. Setup Instructions
-Clone the repository
+### Clone the repository
+```bash
 git clone https://github.com/phuong-ha214/Bitcoin-forecasting-project.git
 cd Bitcoin-forecasting-project
+```
 
-📦 Create the environment
-
-Install required packages:
-
+### Install requirements
+```bash
 pip install -r requirements.txt
+```
 
+---
 
-If you are using Google Colab, simply upload or mount your project folder and run the notebooks.
+# 📊 2. Dataset
 
-📊 2. Dataset
+Raw dataset is stored in:
 
-The raw dataset is stored in:
-
+```
 data/raw/btc_1d_data_2018_to_2025.csv
+```
 
+Contains daily:
 
-It contains:
+- OHLC (open, high, low, close) prices  
+- Volume  
+- Timestamp
+- Quote asset volume
+- Number of trades
+- Taker buy base asset volume
+- Taker buy quote asset volume
+- Ignore
 
-Open/High/Low/Close prices
+---
 
-Volume
-
-Timestamps
-
-You may replace this file with updated data as long as the column structure remains the same.
-
-🧹 3. Preprocessing & Feature Engineering
-Run the preprocessing notebook:
-notebooks/1_preprocessing.ipynb
-
-
-This notebook:
-
-✔ Loads raw BTC data
-✔ Sorts by time
-✔ Creates log-returns
-✔ Generates lag features
-✔ Normalizes features (fit on train only)
-✔ Splits data into train/test
-✔ Saves processed files into:
-
-data/processed/btc_train.csv
-data/processed/btc_test.csv
-
-🤖 4. Train Base Models
-A. ARIMA
+# 🧹 3. Preprocessing & Feature Engineering
 
 Run:
 
-notebooks/2_train_arima.ipynb
+```
+codes/bitcoin-preprocessing.ipynb
+```
 
+This notebook performs the **full end-to-end preprocessing pipeline** used across all models.
+
+---
+
+### ✔ Load & clean raw Bitcoin data
+- Loads `btc_1d_data_2018_to_2025.csv`
+- Parses timestamps into datetime
+- Sorts by `"Open time"` and removes duplicates
+- Computes daily log-returns
+
+---
+
+### ✔ Create target variable (`log_return_norm`)
+- Computes `log_return = log(Close / Close.shift(1))`
+- Runs **ADF stationarity test**  
+- Computes rolling and EWM volatility  
+- Creates **volatility-normalized log return**:
+
+```
+log_return_norm = log_return / ewm_vol_7
+```
+
+This becomes the final supervised learning target.
+
+---
+
+### ✔ Feature engineering
+
+#### **Lagged returns**
+- `lag_1`, `lag_2`, `lag_3`
+
+#### **Volatility features**
+- `vol_7`, `vol_14`, `vol_30`
+- `ewm_vol_7`
+- `vol_ratio = vol_7 / vol_30`
+
+#### **Smoothed returns**
+- `ma_return_3`
+- `ma_return_5`
+
+#### **Volume features**
+- `volume_change`
+- `volume_vol_5`
+
+#### **Price-action & technical signals**
+- `high_low_range`
+- `close_open_ratio`
+- `momentum_3`
+
+All features are shifted appropriately to avoid look-ahead leakage.
+
+---
+
+### ✔ Train/Test split + Scaling (No leakage)
+
+- Split dataset **80% train / 20% test**
+- Fit `StandardScaler()` **only on training features**
+- Apply scaling to full dataset and attach new columns:
+
+```
+<feature>_scaled
+```
+
+---
+
+### ✔ LSTM sequence generation
+
+Using a **sequence length of 7**:
+
+```
+X_train_lstm, y_train_lstm
+X_test_lstm,  y_test_lstm
+```
+
+Sequences maintain chronological ordering to ensure **no temporal leakage**.
+
+---
+
+### ✔ Files saved to `preprocessed/`
+
+```
+preprocessed/btc_train.csv
+preprocessed/btc_test.csv
+
+preprocessed/X_train_lstm.npy
+preprocessed/y_train_lstm.npy
+preprocessed/X_test_lstm.npy
+preprocessed/y_test_lstm.npy
+
+preprocessed/scaler.pkl
+preprocessed/feature_info.pkl
+```
+
+`feature_info.pkl` stores:
+- list of base features  
+- list of scaled features  
+- LSTM sequence length  
+- target variable name  
+
+---
+
+# 🤖 4. Train Base Models
+
+## A. ARIMA
+
+Run:
+```
+codes/arima.ipynb
+```
 
 This notebook:
 
-✔ Fits an ARIMA model on training returns
-✔ Uses auto_arima to select optimal order
-✔ Produces out-of-sample predictions aligned with test set
-✔ Saves predictions to:
+- Fits Auto-ARIMA to `log_return_norm`
+- Predicts on test set
+- Plots **Actual vs Predicted**
+- Saves predictions:
 
-results/arima_preds_train.csv
-results/arima_preds_test.csv
+```
+predictions/arima_train_preds.npy
+predictions/arima_test_preds.npy
+```
 
-B. XGBoost
+---
+
+## B. XGBoost
 
 Run:
-
-notebooks/3_train_xgboost.ipynb
-
+```
+codes/xgboost.ipynb
+```
 
 This notebook:
 
-✔ Loads train/test engineered features
-✔ Trains XGBoost regressor
-✔ Uses TimeSeriesSplit cross-validation
-✔ Outputs predictions to:
+- Trains on engineered + scaled features  
+- Uses TimeSeriesSplit  
+- Plots **Actual vs Predicted**  
+- Saves predictions:
 
-results/xgb_preds_train.csv
-results/xgb_preds_test.csv
+```
+predictions/xgb_train_preds.npy
+predictions/xgb_test_preds.npy
+```
 
-C. LSTM
+---
+
+## C. LSTM
 
 Run:
-
-notebooks/4_train_lstm.ipynb
-
+```
+codes/lstm.ipynb
+```
 
 This notebook:
 
-✔ Builds LSTM with Keras
-✔ Uses 5-fold TimeSeriesSplit to generate out-of-sample predictions for stacking
-✔ Produces final test predictions
-✔ Saves results:
+- Loads LSTM sequences from preprocessing
+- Trains an LSTM model with early stopping
+- Plots **Actual vs Predicted**
+- Saves predictions:
 
-results/lstm_preds_train.csv
-results/lstm_preds_test.csv
+```
+predictions/lstm_train_preds.npy
+predictions/lstm_test_preds.npy
+```
 
-🧠 5. Train the Stacking Meta-Model
+---
+
+# 🧠 5. Stacking Meta-Model
 
 Run:
-
-notebooks/5_train_stacking.ipynb
-
+```
+codes/stacking.ipynb
+```
 
 This notebook:
 
-✔ Loads the 3 base model predictions
-✔ Concatenates them into a feature matrix
-✔ Fits Ridge Regression meta-model
-✔ Generates final ensemble predictions
-✔ Evaluates test performance
-✔ Saves stacked outputs:
+- Loads ARIMA, XGBoost, and LSTM predictions  
+- Builds stacking feature matrix  
+- Fits **Ridge Regression** as the meta-learner  
+- Plots stacked **Actual vs Predicted**
+- Saves predictions:
 
-results/stacked_preds_test.csv
-results/metrics_summary.csv
+```
+predictions/meta_ridge_test_preds.npy
+```
 
-📈 6. Visualizations
+---
+
+# 📈 6. Exploratory Data Analysis
 
 Run:
+```
+codes/data-exploration.ipynb
+```
 
-notebooks/6_plot_results.ipynb
+This notebook performs EDA:
 
+- Bitcoin daily closing price
+- Bitcoin daily log returns
+- Rolling volatility (7-day, 14-day, 30-day)
+- Autocorrelation (ACF) of log returns
+- Distribution of log returns (histogram + KDE)
+- Correlation heatmap of numeric features
+- Scatterplot: today's return vs tomorrow's return
 
-It will generate:
+It **does not save figures**, but is useful for understanding the dataset.
 
-True vs Predicted returns
+---
 
-Rolling error curves
+# 📝 7. Reproducing the Entire Pipeline
 
-Model comparison table
+Run notebooks **in this order**:
 
-Stacking improvement plots
+1. `data-exploration.ipynb`
+2. `bitcoin-preprocessing.ipynb`  
+3. `arima.ipynb`  
+4. `xgboost.ipynb`  
+5. `lstm.ipynb`  
+6. `stacking.ipynb`
 
-Saved into:
-
-results/plots/
-
-📝 7. Reproducing Results (Step-by-Step Summary)
-Run these notebooks in order:
-
-✔ 1_preprocessing.ipynb
-
-✔ 2_train_arima.ipynb
-
-✔ 3_train_xgboost.ipynb
-
-✔ 4_train_lstm.ipynb
-
-✔ 5_train_stacking.ipynb
-
-✔ 6_plot_results.ipynb
-
-After running all, you will obtain:
-
-ARIMA / XGBoost / LSTM model performance
-
-Final stacked model performance
-
-Visualizations + evaluation metrics
-
-Final prediction CSV files
-
-🧩 Notes
-
-All models use training data only to avoid leakage.
-
-All cross-validated predictions are out-of-sample to ensure fair stacking.
-
-You can adjust hyperparameters in each notebook.
+---
