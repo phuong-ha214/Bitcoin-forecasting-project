@@ -32,7 +32,7 @@ pip install -r requirements.txt
 Raw dataset is stored in:
 
 ```
-data/raw/btc_1d_data_2018_to_2025.csv
+dataset/btc_1d_data_2018_to_2025.csv
 ```
 
 Contains daily:
